@@ -35,11 +35,12 @@ unsigned int localPort = 8000;      // local port to listen on
 uint8_t packetBuffer[255]; //buffer to hold incoming packet
 
 // LEDS ------------------------------------------------------------
-#define stripAPin       12
-#define NbLeds          60
 #define startBrightness  50
+// Constructor
+// Adafruit_NeoPixel(nbLeds,pin, neoPixelType t=NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel stripA = Adafruit_NeoPixel(60, 12);
+Adafruit_NeoPixel stripB = Adafruit_NeoPixel(60, 11);
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NbLeds, stripAPin, NEO_GRB + NEO_KHZ800);
 int redVal, greenVal, blueVal = 0;
 int brightVal = 0;
 
@@ -61,8 +62,10 @@ void setup() {
 
   // Setup Leds -------------------------------------------------
   Serial.println("Setuping Leds...");
-  strip.begin();
-  lightForSetup();
+  stripA.begin();
+  stripB.begin();
+  lightForSetup(&stripA);
+  lightForSetup(&stripB);
 
   controlBlink(2, 100);
 
@@ -105,22 +108,13 @@ void setup() {
 
 void loop() {
 
-  // Blink quickly each loop
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-
   // if there's data available, read a packet
   int packetSize = Udp.parsePacket();
   if (packetSize)
   {
-    /*
-      Serial.print("Received packet of size ");
-      Serial.print(packetSize);
-      Serial.print("From ");
-      IPAddress remoteIp = Udp.remoteIP();
-      Serial.print(remoteIp);
-      Serial.print(", port ");
-      Serial.println(Udp.remotePort());
-    */
+    // PRINT IP Address ---
+    Serial.println();
+    printWiFiInfos();
 
     // read the packet into packetBufffer
     int len = Udp.read(packetBuffer, 255);
@@ -129,143 +123,69 @@ void loop() {
     OSCDecoder decoder;
 
     // Blink Message ----------------------------------------
-    if (packetBuffer[len / 2] > 127) {
-      digitalWrite(LED_BUILTIN, HIGH);    // turn the LED off by making the voltage LOW
-    } else {
-      digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-    }
-
-    /*
-      Serial.print("Rough Content : ");
-      for (int i = 0; i < len; i++) {
-      Serial.print(char(packetBuffer[i]));
-      }
-      Serial.println();
-    */
+    Serial.print(" ");
+    Serial.print("PACKET BUFFER ---------------------------");
+    Serial.print((int)(packetBuffer[len - 1]));
+    Serial.print(" ");
+    analogWrite(LED_BUILTIN, packetBuffer[len - 1]);
 
     // Decode Message ----------------------------------------
-    decoder.decode(&m, packetBuffer);
-    int argsNum = m.getArgsNum();
-
-    /*
-      Serial.print("Readable Content : ");
-      Serial.print("Nb Args :");
-      Serial.print(argsNum);
-    */
-
-    for (int j = 0; j < argsNum; j++) {
-      // Float args
-      char type = m.getArgTypeTag(j);
-      // Print ----------------
-      /*
-        Serial.print("| Address : ");
-        Serial.print(m.getOSCAddress());
-        Serial.print("| Arg [");
-        Serial.print(j);
-        Serial.print("] ");
-        Serial.print("| Type:");
-        Serial.print(type);
-        Serial.print("| Value:");
-      */
-
-      switch (type) {
-        case kTagInt32:
-          // Int Argument
-          Serial.print(m.getArgInt32(j));
-          break;
-        case kTagFloat:
-          // Int Argument
-          Serial.print(m.getArgFloat(j));
-          break;
-        case kTagString:
-          // Int Argument
-          char *argString;
-          m.getArgString(j, argString);
-          Serial.print(argString);
-          break;
-
-        case kTagBlob:
-        case kTagMidi:
-        case kTagRgba:
-        case kTagTrue:
-        case kTagFalse:
-        default:
-          // NOT IMPLEMENTED, and default
-          Serial.print("Type unknown");
-          break;
-      }
-
-    }
-    Serial.println();
-
     // SO Read the osc to get the color
+    decoder.decode(&m, packetBuffer);
     String address = m.getOSCAddress();
 
     if (address.startsWith("/color/red")) {
       redVal = m.getArgInt32(0);
 
-      Serial.print("Setting RED Value : ");
+      Serial.print("\tSetting RED Value : ");
       printLog();
 
     } else if (address.startsWith("/color/blue")) {
       blueVal = m.getArgInt32(0);
 
-      Serial.print("Setting BLUE Value : ");
+      Serial.print("\tSetting BLUE Value : ");
       printLog();
 
     } else if (address.startsWith("/color/green")) {
       greenVal = m.getArgInt32(0);
 
-      Serial.print("Setting GREEN Value : ");
+      Serial.print("\tSetting GREEN Value : ");
       printLog();
 
     } else if (address.startsWith("/color/brightness")) {
       brightVal = m.getArgInt32(0);
 
-      Serial.print("Setting BRIGHT Value : ");
+      Serial.print("\tSetting BRIGHT Value : ");
       printLog();
 
     } else {
 
-      Serial.print("Address Unknown !!!!! : ");
+      Serial.print("\tAddress Unknown !!!!! : ");
       Serial.print(address);
-      Serial.print(" length : ");
-      Serial.print(address.length());
       printLog();
 
     }
 
-
-    /*
-      // send a reply, to the IP address and port that sent us the packet we received
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-      Udp.write(ReplyBuffer);
-      Udp.endPacket();
-      Serial.println("Reply:");
-      Serial.println(ReplyBuffer);
-    */
   }
 
   // SO, Color Leds
-  for (int idxLed = 0; idxLed < strip.numPixels(); idxLed++) {
-    strip.setPixelColor(idxLed, strip.Color(redVal, greenVal, blueVal));
-  }
-  strip.setBrightness(brightVal);
-  strip.show();
+  colorTheLeds(&stripA);
+  colorTheLeds(&stripB);
 
+}
+
+void printWiFiInfos() {
+  Serial.print("IP:");
+  Serial.print(localIp);
+  Serial.print(" UDP RemoteIp:");
+  IPAddress remoteIp = Udp.remoteIP();
+  Serial.print(remoteIp);
+  Serial.print(" UDP Remote port:");
+  Serial.print(Udp.remotePort());
 
 }
 
 void printLog() {
-
-  Serial.print("UDP RemoteIp ");
-  IPAddress remoteIp = Udp.remoteIP();
-  Serial.print(remoteIp);
-  Serial.print(", port ");
-  Serial.print(Udp.remotePort());
-
-  Serial.print("IP Address : ");
-  Serial.print(localIp);
   Serial.print(" [R,G,B,Brightness] : ");
   Serial.print("[");
   Serial.print(redVal);
@@ -276,8 +196,6 @@ void printLog() {
   Serial.print(",");
   Serial.print(brightVal);
   Serial.print("]");
-  Serial.println();
-
 }
 
 void printWiFiStatus() {
@@ -307,41 +225,50 @@ uint8_t green(uint32_t c) {
 uint8_t blue(uint32_t c) {
   return (c);
 }
-void lightForSetup() {
+
+// Setup sequence
+void lightForSetup(Adafruit_NeoPixel *myStrip) {
 
   // Half the leds --
-  for (int idxLed = 0; idxLed < strip.numPixels(); idxLed++) {
-    strip.setPixelColor(idxLed, strip.Color(255 * (idxLed % 2), 255 * (idxLed % 2), 255 * (idxLed % 2)));
+  for (int idxLed = 0; idxLed < myStrip->numPixels(); idxLed++) {
+    myStrip->setPixelColor(idxLed, myStrip->Color(255 * (idxLed % 2), 255 * (idxLed % 2), 255 * (idxLed % 2)));
   }
-  strip.setBrightness(startBrightness);
-  strip.show();
+  myStrip->setBrightness(startBrightness);
+  myStrip->show();
 
   // Wait
   delay(1000);
 
   // Half the other leds --
-  for (int idxLed = 0; idxLed < strip.numPixels(); idxLed++) {
-    strip.setPixelColor(idxLed, strip.Color(255 * ((idxLed + 1) % 2), 255 * ((idxLed + 1) % 2), 255 * ((idxLed + 1) % 2)));
+  for (int idxLed = 0; idxLed < myStrip->numPixels(); idxLed++) {
+    myStrip->setPixelColor(idxLed, myStrip->Color(255 * ((idxLed + 1) % 2), 255 * ((idxLed + 1) % 2), 255 * ((idxLed + 1) % 2)));
   }
-  strip.setBrightness(startBrightness);
-  strip.show();
+  myStrip->setBrightness(startBrightness);
+  myStrip->show();
 
   // Wait
   delay(1000);
 
   // All Off --
-  for (int idxLed = 0; idxLed < strip.numPixels(); idxLed++) {
-    strip.setPixelColor(idxLed, strip.Color(0, 0, 0));
+  for (int idxLed = 0; idxLed < myStrip->numPixels(); idxLed++) {
+    myStrip->setPixelColor(idxLed, myStrip->Color(0, 0, 0));
   }
-  strip.setBrightness(0);
-  strip.show();
+  myStrip->setBrightness(0);
+  myStrip->show();
 
+}
+
+void colorTheLeds(Adafruit_NeoPixel *myStrip) {
+  for (int idxLed = 0; idxLed < myStrip->numPixels(); idxLed++) {
+    myStrip->setPixelColor(idxLed, myStrip->Color(redVal, greenVal, blueVal));
+  }
+  myStrip->setBrightness(brightVal);
+  myStrip->show();
 }
 
 // Control Section -----------------------------------------
 // Takes a 100 ms --
 void controlBlink(int nbBlink, int delayInMs) {
-
   for (int n = 0; n < nbBlink; n++) {
     digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
     delay(delayInMs / 2);                       // wait for a second
