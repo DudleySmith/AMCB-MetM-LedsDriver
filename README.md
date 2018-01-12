@@ -17,5 +17,5 @@
 Arduino used are Feather M0 : https://www.adafruit.com/product/3010
 
 #### OSC Messages awaited :
-/animation/color/red, /animation/color/green, /animation/color/blue : to set the color
-/animation/brightness : to set the main brightness
+* _/animation/color/red, /animation/color/green, /animation/color/blue_ : to set the color
+* _/animation/brightness_ : to set the main brightness
